@@ -1,0 +1,7 @@
+### Test OpenAI Ask Route
+POST http://localhost:3000/ask
+Content-Type: application/json
+
+{
+  "message": "Hello, test rate limit"
+}
