@@ -59,7 +59,7 @@ const PORT = 3000;
 const corsOptions = {
   origin: '*', // use your Netlify URL here in production
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Accept'],
 };
 
 app.use(cors(corsOptions));
