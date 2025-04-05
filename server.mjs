@@ -1,6 +1,7 @@
 // server.mjs
 import express from 'express';
 import cors from 'cors';
+app.use(cors({origin: true}));
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
