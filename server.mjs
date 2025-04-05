@@ -56,7 +56,13 @@ const app = express();
 const PORT = 3000;
 
 // 🔧 Middleware
-app.use(cors({ origin: true }));
+const corsOptions = {
+  origin: '*', // use your Netlify URL here in production
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 // 🔹 OpenAI Chat Route
