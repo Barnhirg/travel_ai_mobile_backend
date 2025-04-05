@@ -1,7 +1,6 @@
 // server.mjs
 import express from 'express';
 import cors from 'cors';
-app.use(cors({origin: true}));
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
@@ -57,7 +56,7 @@ const app = express();
 const PORT = 3000;
 
 // 🔧 Middleware
-app.use(cors());
+app.use(cors({ origin: true }));
 app.use(bodyParser.json());
 
 // 🔹 OpenAI Chat Route
