@@ -57,11 +57,13 @@ const PORT = 3000;
 
 // 🔧 Middleware
 const corsOptions = {
-  origin: '*', // use your Netlify URL here in production
+  origin: [
+    'https://travel-agent-ai-planner.netlify.app', // ✅ Netlify frontend
+    'http://localhost:3000' // ✅ local dev
+  ],
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Accept'],
+  allowedHeaders: ['Content-Type'],
 };
-
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
