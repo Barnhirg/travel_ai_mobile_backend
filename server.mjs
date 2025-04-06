@@ -28,28 +28,38 @@ app.post('/ask', askLimiter, async (req, res) => {
   try {
     const { messages } = req.body;
 
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ error: 'Invalid message history.' });
+    // ✅ Validate message history
+    if (
+      !Array.isArray(messages) ||
+      messages.length === 0 ||
+      !messages.every(m => m.role && m.content)
+    ) {
+      return res.status(400).json({ error: 'Invalid message history' });
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
-        messages: messages
-      })
+        messages: messages, // ✅ Just pass through, assuming it passed validation
+      }),
     });
 
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || 'No response.';
+    const data = await openaiResponse.json();
+    const reply = data.choices?.[0]?.message?.content?.trim();
+
+    if (!reply) {
+      return res.status(500).json({ error: 'Invalid response from OpenAI' });
+    }
+
     res.json({ reply });
   } catch (err) {
-    console.error('OpenAI Error:', err);
-    res.status(500).json({ error: 'Failed to generate AI response.' });
+    console.error('Error in /ask route:', err);
+    res.status(500).json({ error: 'Server error. Please try again later.' });
   }
 });
 
