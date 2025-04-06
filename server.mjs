@@ -1,217 +1,179 @@
-// server.mjs
+// server.mjs (Final Clean Version)
+
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
 
+// Load environment variables
 dotenv.config();
 
-// 🔒 Rate Limiters
-const askLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: 50,
-  message: { error: 'Daily chat limit reached.' }
-});
-
-const weatherLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 20,
-  message: { error: 'Weather request limit reached.' }
-});
-
-const eventsLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 15,
-  message: { error: 'Event request limit reached.' }
-});
-
-const flightsLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 10,
-  message: { error: 'Flight lookup limit reached.' }
-});
-
-const hotelsLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 10,
-  message: { error: 'Hotel search limit reached.' }
-});
-
-const carsLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 10,
-  message: { error: 'Car rental request limit reached.' }
-});
-
-const currencyLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: 25,
-  message: { error: 'Currency API limit reached.' }
-});
-
-// 🚀 Initialize Server
+// Initialize Express
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// 🔧 Middleware
+// Middleware
 const corsOptions = {
   origin: [
-    'https://travel-agent-ai-planner.netlify.app', // ✅ Netlify frontend
-    'http://localhost:3000' // ✅ local dev
+    'https://travel-agent-ai-planner.netlify.app', // Netlify frontend
+    'http://localhost:3000' // Local dev
   ],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type'],
 };
+
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
-// 🔹 OpenAI Chat Route
+// Rate Limiters
+const limiter = (max, msg) => rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hrs
+  max,
+  message: { error: msg },
+});
+
+const askLimiter = limiter(50, 'Daily chat limit reached.');
+const weatherLimiter = limiter(20, 'Weather request limit reached.');
+const eventsLimiter = limiter(15, 'Event request limit reached.');
+const flightsLimiter = limiter(10, 'Flight lookup limit reached.');
+const hotelsLimiter = limiter(10, 'Hotel search limit reached.');
+const carsLimiter = limiter(10, 'Car rental request limit reached.');
+const currencyLimiter = limiter(25, 'Currency API limit reached.');
+
+// 🧠 OpenAI Chat Route
 app.post('/ask', askLimiter, async (req, res) => {
   try {
     const { message } = req.body;
-
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: message }]
-      })
+        messages: [{ role: 'user', content: message }],
+      }),
     });
 
     const data = await response.json();
-    res.json({ reply: data.choices?.[0]?.message?.content || 'No response.' });
+    res.json({ reply: data.choices[0]?.message?.content?.trim() });
   } catch (err) {
-    console.error('OpenAI Error:', err);
-    res.status(500).json({ error: 'Failed to generate AI response.' });
+    res.status(500).json({ error: 'Failed to connect to OpenAI.' });
   }
 });
 
-// 🔹 Weather Route
+// 🌦 OpenWeather Route
 app.get('/weather', weatherLimiter, async (req, res) => {
-  const { city } = req.query;
-  if (!city) return res.status(400).json({ error: 'City is required.' });
-
+  const city = req.query.city;
   try {
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric`;
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric`;
     const response = await fetch(url);
     const data = await response.json();
-    res.json({ success: true, weather: data });
+    res.json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch weather data.' });
+    res.status(500).json({ error: 'Weather lookup failed.' });
   }
 });
 
-// 🔹 Events Route
+// 🎫 Ticketmaster Events
 app.get('/events', eventsLimiter, async (req, res) => {
-  const { city } = req.query;
-  if (!city) return res.status(400).json({ error: 'City is required.' });
-
+  const city = req.query.city;
   try {
-    const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${process.env.TICKETMASTER_API_KEY}&city=${encodeURIComponent(city)}`;
+    const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${process.env.TICKETMASTER_API_KEY}&city=${city}`;
     const response = await fetch(url);
     const data = await response.json();
-    res.json({ success: true, events: data._embedded?.events || [] });
+    res.json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch events.' });
+    res.status(500).json({ error: 'Event search failed.' });
   }
 });
 
-// 🔹 Flights Route
+// ✈️ Flights (Aviationstack)
 app.get('/flights', flightsLimiter, async (req, res) => {
-  const { origin, destination, date } = req.query;
-  if (!origin || !destination || !date) return res.status(400).json({ error: 'Missing flight parameters.' });
-
+  const { dep_iata, arr_iata } = req.query;
   try {
-    const tokenRes = await fetch('https://test.api.amadeus.com/v1/security/oauth2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: process.env.AMADEUS_API_KEY,
-        client_secret: process.env.AMADEUS_API_SECRET
-      })
-    });
-    const tokenData = await tokenRes.json();
-    const token = tokenData.access_token;
-
-    const flightRes = await fetch(`https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=${origin}&destinationLocationCode=${destination}&departureDate=${date}&adults=1`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const flightData = await flightRes.json();
-    res.json({ success: true, flights: flightData.data || [] });
+    const url = `http://api.aviationstack.com/v1/flights?access_key=${process.env.Aviationstack_API_KEY}&dep_iata=${dep_iata}&arr_iata=${arr_iata}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch flight data.' });
+    res.status(500).json({ error: 'Flight lookup failed.' });
   }
 });
 
-// 🔹 Hotels Route
+// 🏨 Hotels (Amadeus)
 app.get('/hotels', hotelsLimiter, async (req, res) => {
-  const { cityCode } = req.query;
-  if (!cityCode) return res.status(400).json({ error: 'City code is required.' });
-
+  const { lat, lon } = req.query;
   try {
+    // Get access token
     const tokenRes = await fetch('https://test.api.amadeus.com/v1/security/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'client_credentials',
-        client_id: process.env.AMADEUS_API_KEY,
-        client_secret: process.env.AMADEUS_API_SECRET
-      })
+        client_id: process.env.Amadeus_API_KEY,
+        client_secret: process.env.Amadeus_API_SECRET
+      }),
     });
-    const tokenData = await tokenRes.json();
-    const token = tokenData.access_token;
+    const { access_token } = await tokenRes.json();
 
-    const hotelRes = await fetch(`https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-city?cityCode=${cityCode}`, {
-      headers: { Authorization: `Bearer ${token}` }
+    // Get hotels
+    const hotelRes = await fetch(`https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-geocode?latitude=${lat}&longitude=${lon}&radius=10`, {
+      headers: { Authorization: `Bearer ${access_token}` },
     });
     const hotelData = await hotelRes.json();
-    res.json({ success: true, hotels: hotelData.data || [] });
+    res.json(hotelData);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch hotel data.' });
+    res.status(500).json({ error: 'Hotel search failed.' });
   }
 });
 
-// 🔹 Cars Route
+// 🚗 Car Rentals (Amadeus)
 app.get('/cars', carsLimiter, async (req, res) => {
-  const { cityCode, startDate, endDate } = req.query;
-  if (!cityCode || !startDate || !endDate) return res.status(400).json({ error: 'Missing car rental parameters.' });
-
+  const { lat, lon } = req.query;
   try {
     const tokenRes = await fetch('https://test.api.amadeus.com/v1/security/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'client_credentials',
-        client_id: process.env.AMADEUS_API_KEY,
-        client_secret: process.env.AMADEUS_API_SECRET
-      })
+        client_id: process.env.Amadeus_API_KEY,
+        client_secret: process.env.Amadeus_API_SECRET
+      }),
     });
-    const tokenData = await tokenRes.json();
-    const token = tokenData.access_token;
+    const { access_token } = await tokenRes.json();
 
-    const carRes = await fetch(`https://test.api.amadeus.com/v1/shopping/availability/car-rental-offers?pickupLocation=${cityCode}&pickupDate=${startDate}&returnDate=${endDate}`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const carRes = await fetch(`https://test.api.amadeus.com/v1/shopping/availability/car-rental?latitude=${lat}&longitude=${lon}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
     });
     const carData = await carRes.json();
-    res.json({ success: true, cars: carData.data || [] });
+    res.json(carData);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch car rental data.' });
+    res.status(500).json({ error: 'Car rental search failed.' });
   }
 });
 
-// 🔹 Currency Route (placeholder)
-app.get('/currency', currencyLimiter, (req, res) => {
-  res.json({ message: 'Currency endpoint active.' });
+// 💱 Currency Exchange
+app.get('/currency', currencyLimiter, async (req, res) => {
+  try {
+    const url = `https://v6.exchangerate-api.com/v6/${process.env.EXCHANGE_RATE_API_KEY}/latest/USD`;
+    const response = await fetch(url);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Currency lookup failed.' });
+  }
 });
 
-// 🚦 Start Server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server is listening on http://0.0.0.0:${PORT}`);
+// ✅ Health Check
+app.get('/', (req, res) => {
+  res.send('Travel Planner AI backend is running.');
+});
+
+// Start Server
+app.listen(PORT, () => {
+  console.log(`✅ Server is running on port ${PORT}`);
 });
